@@ -503,15 +503,14 @@ var SigWidgetAnnotation = (function SigWidgetAnnotationClosure() {
       console.log(hash_data);
 
 
-      /* aqui obter a parte correspondente à assinatura feita sobre o pdf;
-      em seguida aplicar a chave publica ao valor obtido
-      obter um valor descodificado... que é o quê? a hash?
+      /* get the part corresponding to the signed value
+      apply the public key to it
+      get decrypted value
       */
 
       var signed = "6bfd7226e101c2874630174ba846b92aa4d824d8bb5ff2b7404f776f0668e18b3d7c66945b7616505668b194639d4a75d09fa62299ad769964c0711c953b126526a5bbb0474d44aa373c09951ad60411cb3c576fb338314c5e697d6c9f366f1e50eedc3734894d5ca1372c79a4359a569ea146926275878381ba4e7e98957882";
       var bytes = hexToBytes(signed);
       var decrypted = forge.pki.rsa.decrypt(bytes,p7.certificates[0].publicKey,true,false);
-      //printcenas(p7.certificates[0].publicKey);
       
 
  /* @param ed the encrypted data to decrypt in as a byte string.
@@ -521,13 +520,14 @@ var SigWidgetAnnotation = (function SigWidgetAnnotationClosure() {
  * @return the decrypted message as a byte string.
  */
 
+      //compare decrypted with the hash value
 
       /* check if the hash value
-          in the pkcs7 object matches the pdf's hash value */
+          in the pkcs7 object matches the pdf's hash value
       var res = toHex(contentsValue).indexOf(hash_data);
       if(res == -1) { // hash value not found in the contentsValue
         validHash = false;
-      }
+      }*/
 
       /* check the certificate chain */
       var new_chain = certificateChain.reverse();
