@@ -257,43 +257,6 @@ var Page = (function PageClosure() {
 
     get annotations() {
 
-
-
-
-
-
-
-
-var contentStreamPromise = this.pdfManager.ensure(this, 'getContentStream',
-                                                    []);
- 
-       var dataPromises = Promise.all([contentStreamPromise]);
-       var x = dataPromises.then(function(data) {
-         var contentStream = data[0];
-         teste(contentStream.str.bytes);
-         // printcenas(contentStream.str.bytes);
-       });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
       var annotations = [];
       var annotationRefs = (this.annotationRefs || []);
       for (var i = 0, n = annotationRefs.length; i < n; ++i) {

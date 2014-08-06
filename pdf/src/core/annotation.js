@@ -24,9 +24,6 @@ var DEFAULT_ICON_SIZE = 22; // px
 var SUPPORTED_TYPES = ['Link', 'Text', 'Widget'];
 
 
-var pdfData;
-
-
 
 var Annotation = (function AnnotationClosure() {
   // 12.5.5: Algorithm: Appearance streams
@@ -473,6 +470,7 @@ var SigWidgetAnnotation = (function SigWidgetAnnotationClosure() {
 
 
     require(['forge.bundle'], function (forge) {
+      try{
        /* pkcs7 der encoded object */
       var pkcs7object = preparePKCS7(hexToBase64(toHex(contentsValue)));
 
@@ -515,7 +513,7 @@ var SigWidgetAnnotation = (function SigWidgetAnnotationClosure() {
           var authattr = p7.rawCapture.authenticatedAttributes[index];
           if(forge.asn1.derToOid(authattr.value[0].value) == forge.oids['messageDigest']){
              /* prepares file contents to be hashed, excluding the contents part according to the byterange */
-            var fileContents = getContentForDigest(byteRange, pdfData);
+            var fileContents = getContentForDigest(byteRange, dict.xref.stream.bytes);
             md = forge.md[digestAlgo].create();
             md.update(fileContents);
             var doc_hash = md.digest().bytes();
@@ -575,7 +573,7 @@ var SigWidgetAnnotation = (function SigWidgetAnnotationClosure() {
 
 
 
-
+    }catch(e){console.log(e);}
     });
 
     
@@ -689,17 +687,6 @@ function verifySign(data,cert){
 
 
 
-
-function teste(object) {
-   console.log("TESTE");
-   console.log("Tamanho: "+object.length)
-   // printcenas(object);
-   pdfData = object;
- }
-
-
-
-
 function printcenas(object) {
   if(object == null) console.log("OBJECTO INVALIDO/NULO!");
   var output = '';
@@ -749,11 +736,6 @@ function preparePKCS7(str) {
     }
     p7 += "\n-----END PKCS7-----";
     return p7;
-}
-
-function teste(object) {
-  
-  pdfData = object;
 }
 
 function getContentForDigest(byteRange, pdfData) {
