@@ -469,14 +469,16 @@ var SigWidgetAnnotation = (function SigWidgetAnnotationClosure() {
     var byteRange = data.fieldValue.get('ByteRange'); 
 
 
-    /* pkcs7 der encoded object */
-    var pkcs7object = preparePKCS7(hexToBase64(toHex(contentsValue)));
+   
 
 
     require(['forge.bundle'], function (forge) {
+       /* pkcs7 der encoded object */
+      var pkcs7object = preparePKCS7(hexToBase64(toHex(contentsValue)));
 
       var validCert = true;
       var validHash = true;
+      var docModified = true;
 
       /* pkcs7 object */
       var p7 = forge.pkcs7.messageFromPem(pkcs7object);
@@ -484,34 +486,45 @@ var SigWidgetAnnotation = (function SigWidgetAnnotationClosure() {
       /* certificate chain */
       var certificateChain = p7.certificates;
 
-      /* the cert to be verified is in the last position of the chain */
-      var posCertToBeVerified = p7.certificates.length - 1;
-
-      /* verifies the certificate against the certificate chain */
+      /* we want the signing cert to be in the first position of the chain */
+      for (var indexe = 0; indexe < certificateChain[0].extensions.length; ++indexe) {
+          if(certificateChain[0].extensions[indexe].name == "basicConstraints"){
+            if(certificateChain[0].extensions[indexe].cA)
+              {
+                certificateChain.reverse();
+                break;
+              }
+          }
+      }
       
+      /* verifies the signature in signerInfo */
+      var digestAlgo = forge.oids[forge.asn1.derToOid(p7.rawCapture.signerInfos[0].value[2].value[0].value)];
+      var attrSet = forge.asn1.create(forge.asn1.Class.UNIVERSAL, forge.asn1.Type.SET, true, p7.rawCapture.authenticatedAttributes);
+      var md = forge.md[digestAlgo].create();      
+      md.update(forge.asn1.toDer(attrSet).bytes());
+      var authdigest = md.digest().bytes();
 
-      /* prepares file contents to be hashed, excluding the contents part according to the byterange */
-      var fileContents = getContentForDigest(byteRange, pdfData);
-               
-      /* the used digest algoritm needs to be determined from the pkcs7 object 
-          for testing, sha256 will be used
-      */   
-      var md = forge.md.sha256.create();
-      md.update(fileContents);
-      var hash_data = md.digest().toHex();
-
-      console.log(hash_data);
-
-
-      /* get the part corresponding to the signed value
-      apply the public key to it
-      get decrypted value
-      */
-
-      var signed = "6bfd7226e101c2874630174ba846b92aa4d824d8bb5ff2b7404f776f0668e18b3d7c66945b7616505668b194639d4a75d09fa62299ad769964c0711c953b126526a5bbb0474d44aa373c09951ad60411cb3c576fb338314c5e697d6c9f366f1e50eedc3734894d5ca1372c79a4359a569ea146926275878381ba4e7e98957882";
-      var bytes = hexToBytes(signed);
-      var decrypted = forge.pki.rsa.decrypt(bytes,p7.certificates[0].publicKey,true,false);
+      //var signed = "6bfd7226e101c2874630174ba846b92aa4d824d8bb5ff2b7404f776f0668e18b3d7c66945b7616505668b194639d4a75d09fa62299ad769964c0711c953b126526a5bbb0474d44aa373c09951ad60411cb3c576fb338314c5e697d6c9f366f1e50eedc3734894d5ca1372c79a4359a569ea146926275878381ba4e7e98957882";
+      validHash = p7.certificates[0].publicKey.verify(authdigest,p7.rawCapture.signature);
       
+      if(validHash){
+        //Verify that the MessageDigest (oid 1.2.840.113549.1.9.4) in authenticatedAttributes is equal to the 
+        //digest of the document
+        var attrlenght = p7.rawCapture.authenticatedAttributes.length;
+        for(var index = 0 ; index<attrlenght ; index++){
+          var authattr = p7.rawCapture.authenticatedAttributes[index];
+          if(forge.asn1.derToOid(authattr.value[0].value) == forge.oids['messageDigest']){
+             /* prepares file contents to be hashed, excluding the contents part according to the byterange */
+            var fileContents = getContentForDigest(byteRange, pdfData);
+            md = forge.md[digestAlgo].create();
+            md.update(fileContents);
+            var doc_hash = md.digest().bytes();
+            
+            docModified = !(authattr.value[1].value[0].value == doc_hash);
+          }
+          
+        }
+      }
 
  /* @param ed the encrypted data to decrypt in as a byte string.
  * @param key the RSA key to use.
@@ -530,17 +543,16 @@ var SigWidgetAnnotation = (function SigWidgetAnnotationClosure() {
       }*/
 
       /* check the certificate chain */
-      var new_chain = certificateChain.reverse();
 
       try {
-        var caStore = forge.pki.createCaStore();
-        caStore.addCertificate(certificateChain[0]);
-
-        forge.pki.verifyCertificateChain(caStore, new_chain, function(vfd, depth, chain2) {
-          
-
-        });
-
+        if(certificateChain.length > 1){
+          var caStore = forge.pki.createCaStore();
+          caStore.addCertificate(certificateChain[certificateChain.length-1]);
+          forge.pki.verifyCertificateChain(caStore, certificateChain);
+        }else{
+           validCert = false;
+           console.log("Cannot verify the signing certificate, chain missing");
+        }
       } catch(err) {
         validCert = false;
         console.log(err.message);
@@ -548,7 +560,7 @@ var SigWidgetAnnotation = (function SigWidgetAnnotationClosure() {
 
       console.log("\n\n");
 
-      if(validCert && validHash) {
+      if(validCert && validHash && !docModified) {
         /* valid digital signature */
         console.log("Valid signature!");
       }
@@ -558,6 +570,7 @@ var SigWidgetAnnotation = (function SigWidgetAnnotationClosure() {
 
       if(!validHash) { console.log("- invalid hash"); }
       if(!validCert) { console.log("- invalid cert"); }
+      if(docModified) { console.log("- document modified after signature"); }
 
 
 
