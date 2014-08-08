@@ -26595,7 +26595,8 @@ var _fromAsn1 = function(msg, obj, validator) {
 
   // Check contentType, so far we only support (raw) Data.
   var contentType = asn1.derToOid(capture.contentType);
-  if(contentType !== forge.pki.oids.data) {
+  if(contentType !== forge.pki.oids.data &&
+     contentType !== "1.2.840.113549.1.9.16.1.4") {
     throw new Error('Unsupported PKCS#7 message. ' +
       'Only wrapped ContentType Data supported.');
   }

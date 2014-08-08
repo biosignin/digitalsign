@@ -461,16 +461,19 @@ var SigWidgetAnnotation = (function SigWidgetAnnotationClosure() {
 
     data.fieldValue = Util.getInheritableProperty(params.dict, 'V');
     
-    
+    if(!data.fieldValue) return;
+
     var contentsValue = data.fieldValue.get('Contents');
     var byteRange = data.fieldValue.get('ByteRange'); 
-
+    var subFilter = data.fieldValue.get("SubFilter");
 
    
 
 
     require(['forge.bundle'], function (forge) {
       try{
+      var isCades = subFilter.name == "ETSI.CAdES.detached";
+
        /* pkcs7 der encoded object */
       var pkcs7object = preparePKCS7(hexToBase64(toHex(contentsValue)));
 
@@ -484,14 +487,23 @@ var SigWidgetAnnotation = (function SigWidgetAnnotationClosure() {
       /* certificate chain */
       var certificateChain = p7.certificates;
 
-      /* we want the signing cert to be in the first position of the chain */
-      for (var indexe = 0; indexe < certificateChain[0].extensions.length; ++indexe) {
-          if(certificateChain[0].extensions[indexe].name == "basicConstraints"){
-            if(certificateChain[0].extensions[indexe].cA)
-              {
-                certificateChain.reverse();
-                break;
-              }
+      var signCert = certificateChain[0];
+      var signSerialNumber = toHex(p7.rawCapture.signerInfos[0].value[1].value[1].value);
+      var sequencialCertChain = [];
+      /* find the signing cert */
+      for (var index = 0; index < certificateChain.length; ++index) {
+          if(certificateChain[index].serialNumber == signSerialNumber){
+            signCert = certificateChain[index];
+            sequencialCertChain.push(signCert);
+            break;
+          }
+      }
+      var lastFound = signCert;
+      for (var index = 0; index < certificateChain.length; ++index) {
+          if(lastFound != certificateChain[index] && lastFound.isIssuer(certificateChain[index])){
+            lastFound = certificateChain[index];
+            sequencialCertChain.push(lastFound);
+            index = 0;
           }
       }
       
@@ -503,7 +515,7 @@ var SigWidgetAnnotation = (function SigWidgetAnnotationClosure() {
       var authdigest = md.digest().bytes();
 
       //var signed = "6bfd7226e101c2874630174ba846b92aa4d824d8bb5ff2b7404f776f0668e18b3d7c66945b7616505668b194639d4a75d09fa62299ad769964c0711c953b126526a5bbb0474d44aa373c09951ad60411cb3c576fb338314c5e697d6c9f366f1e50eedc3734894d5ca1372c79a4359a569ea146926275878381ba4e7e98957882";
-      validHash = p7.certificates[0].publicKey.verify(authdigest,p7.rawCapture.signature);
+      validHash = signCert.publicKey.verify(authdigest,p7.rawCapture.signature);
       
       if(validHash){
         //Verify that the MessageDigest (oid 1.2.840.113549.1.9.4) in authenticatedAttributes is equal to the 
@@ -543,10 +555,10 @@ var SigWidgetAnnotation = (function SigWidgetAnnotationClosure() {
       /* check the certificate chain */
 
       try {
-        if(certificateChain.length > 1){
+        if(sequencialCertChain.length > 1){
           var caStore = forge.pki.createCaStore();
-          caStore.addCertificate(certificateChain[certificateChain.length-1]);
-          forge.pki.verifyCertificateChain(caStore, certificateChain);
+          caStore.addCertificate(sequencialCertChain[sequencialCertChain.length-1]);
+          forge.pki.verifyCertificateChain(caStore, sequencialCertChain);
         }else{
            validCert = false;
            console.log("Cannot verify the signing certificate, chain missing");
@@ -555,8 +567,6 @@ var SigWidgetAnnotation = (function SigWidgetAnnotationClosure() {
         validCert = false;
         console.log(err.message);
       }
-
-      console.log("\n\n");
 
       if(validCert && validHash && !docModified) {
         /* valid digital signature */
@@ -571,7 +581,8 @@ var SigWidgetAnnotation = (function SigWidgetAnnotationClosure() {
       if(docModified) { console.log("- document modified after signature"); }
 
 
-
+      console.log("Signed by  " + signCert.subject.getField("CN").value);
+      console.log("\n\n");
 
     }catch(e){console.log(e);}
     });
