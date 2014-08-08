@@ -473,6 +473,7 @@ var SigWidgetAnnotation = (function SigWidgetAnnotationClosure() {
     require(['forge.bundle'], function (forge) {
       try{
       var isCades = subFilter.name == "ETSI.CAdES.detached";
+      var isTsp   = subFilter.name == "ETSI.RFC3161";
 
        /* pkcs7 der encoded object */
       var pkcs7object = preparePKCS7(hexToBase64(toHex(contentsValue)));

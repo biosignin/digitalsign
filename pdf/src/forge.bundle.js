@@ -19505,7 +19505,8 @@ pki.verifyCertificateChain = function(caStore, chain, verify) {
       // supported extensions
       var se = {
         keyUsage: true,
-        basicConstraints: true
+        basicConstraints: true,
+        extKeyUsage: true
       };
       for(var i = 0; error === null && i < cert.extensions.length; ++i) {
         var ext = cert.extensions[i];
