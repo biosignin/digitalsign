@@ -471,12 +471,18 @@ var SigWidgetAnnotation = (function SigWidgetAnnotationClosure() {
 
 
     require(['forge.bundle'], function (forge) {
+      function preparePKCS7(str) {
+        var p7 = "-----BEGIN PKCS7-----\n";
+        p7 +=str;
+        p7 += "\n-----END PKCS7-----";
+        return p7;
+      }
       try{
       var isCades = subFilter.name == "ETSI.CAdES.detached";
       var isTsp   = subFilter.name == "ETSI.RFC3161";
 
        /* pkcs7 der encoded object */
-      var pkcs7object = preparePKCS7(hexToBase64(toHex(contentsValue)));
+      var pkcs7object = preparePKCS7(forge.util.encode64(contentsValue,64));
 
       var validCert = true;
       var validHash = true;
@@ -489,13 +495,13 @@ var SigWidgetAnnotation = (function SigWidgetAnnotationClosure() {
       var certificateChain = p7.certificates;
 
       var signCert = certificateChain[0];
-      var signSerialNumber = toHex(p7.rawCapture.signerInfos[0].value[1].value[1].value);
-      var sequencialCertChain = [];
+      var signSerialNumber = forge.util.bytesToHex(p7.rawCapture.signerInfos[0].value[1].value[1].value);
+      var sequentialCertChain = [];
       /* find the signing cert */
       for (var index = 0; index < certificateChain.length; ++index) {
           if(certificateChain[index].serialNumber == signSerialNumber){
             signCert = certificateChain[index];
-            sequencialCertChain.push(signCert);
+            sequentialCertChain.push(signCert);
             break;
           }
       }
@@ -503,7 +509,7 @@ var SigWidgetAnnotation = (function SigWidgetAnnotationClosure() {
       for (var index = 0; index < certificateChain.length; ++index) {
           if(lastFound != certificateChain[index] && lastFound.isIssuer(certificateChain[index])){
             lastFound = certificateChain[index];
-            sequencialCertChain.push(lastFound);
+            sequentialCertChain.push(lastFound);
             index = 0;
           }
       }
@@ -556,10 +562,10 @@ var SigWidgetAnnotation = (function SigWidgetAnnotationClosure() {
       /* check the certificate chain */
 
       try {
-        if(sequencialCertChain.length > 1){
+        if(sequentialCertChain.length > 1){
           var caStore = forge.pki.createCaStore();
-          caStore.addCertificate(sequencialCertChain[sequencialCertChain.length-1]);
-          forge.pki.verifyCertificateChain(caStore, sequencialCertChain);
+          caStore.addCertificate(sequentialCertChain[sequentialCertChain.length-1]);
+          forge.pki.verifyCertificateChain(caStore, sequentialCertChain);
         }else{
            validCert = false;
            console.log("Cannot verify the signing certificate, chain missing");
@@ -607,148 +613,6 @@ var SigWidgetAnnotation = (function SigWidgetAnnotationClosure() {
 })();
 
 
-function verifyCertificate(chain,cert) {
-
-  var res = true;
-
-  require(['forge.bundle'], function (forge) {
-    
-    var new_chain = chain.reverse();
-
-    try {
-      var caStore = forge.pki.createCaStore();
-      caStore.addCertificate(chain[0]);
-
-      forge.pki.verifyCertificateChain(caStore, new_chain, function(vfd, depth, chain2) {
-          
-
-      });
-
-    } catch(err) {
-      console.log("escaxe");
-        res = false;
-      console.log(err.message);
-    }
-
-
-  });
-
-  return res;
-
-}
- 
-
-function verifySign(data,cert){ 
-  require(['forge.bundle'], function (forge) {
-
-    console.log("-----------------Verificar Assinatura-------------");
-
-    // get public key
-    var pkey = cert.publicKey;
-    //console.log("Public Key:");
-    //printcenas(pkey);
-
-    var sign = cert.signature;
-    //console.log("Assinatura:");
-    //console.log(sign);
-
-    printcenas(data);
-
-    var md = forge.md.sha256.create();
-    // tem de ser o data sem a parte da assinatura(falta!)
-    md.update(data);
-    var hash_data = md.digest().toHex();
-    //console.log("HASH_original:");
-    //console.log(hash_data);
-
-
-      // ESTA SO DA PARA PKCS1
-
-      // try {
-      //   var rval = cert.publicKey.verify(md.digest().getBytes(), cert.signature, 'NONE');
-      //   console.log("teste:");
-      //   console.log(rval);
-      //   throw new Error("Whoops!");
-      // }catch(err) {
-      //   console.log(err.name + ": " + err.message);
-      // }
-
-
-    try {
-      var d = forge.pki.rsa.decrypt(cert.signature, pkey, true, cert.signature.length);
-
-        // Despois comparar d com hash_data
-
-        throw new Error("Whoops!");
-    }catch(err) {
-        console.log(err.message);
-    }
-
-  });
-
-}
-
-
-
-
- function hexToBytes(hex) {
-                for (var bytes = [], c = 0; c < hex.length; c += 2)
-                        bytes.push(parseInt(hex.substr(c, 2), 16));
-                return bytes;
-        }
-
-
-
-function printcenas(object) {
-  if(object == null) console.log("OBJECTO INVALIDO/NULO!");
-  var output = '';
-        for (var property in object) {
-          output += property + ': ' + object[property]+'; ';
-        }
-        console.log(output);
-}
-
-function toHex(str) {
-  var hex = '';
-  for(var i=0;i<str.length;i++) {
-    //precisa de ser assim, caso contrario certos 0 sao omitidos
-    hex += decimalToHex(str.charCodeAt(i),2);
-  }
-  return hex;
-}
-
-function decimalToHex(d, padding) {
-
-    var hex = Number(d).toString(16);
-    padding = typeof (padding) === "undefined" || padding === null ? padding = 2 : padding;
-
-    while (hex.length < padding) {
-        hex = "0" + hex;
-    }
-
-    return hex;
-}
-
-function hexToBase64(str) {
-  return btoa(String.fromCharCode.apply(null,
-    str.replace(/\r|\n/g, "").replace(/([\da-fA-F]{2}) ?/g, "0x$1 ").replace(/ +$/, "").split(" "))
-  );
-}
-
-function preparePKCS7(str) {
-    var p7 = "-----BEGIN PKCS7-----\n";
-    var delimiter = 1;
-    for(var i = 0; i < str.length; i++) {
-        p7 += str[i];
-        delimiter++;
-        if(delimiter == 64) {
-          p7 += '\n';
-          delimiter = 1;
-        }
-    }
-    p7 += "\n-----END PKCS7-----";
-    return p7;
-}
 
 function getContentForDigest(byteRange, pdfData) {
 
@@ -766,27 +630,6 @@ function getContentForDigest(byteRange, pdfData) {
 
       return x;
     }
-
-function printCertificates(p7) {
-
-for(var j=0; j < p7.certificates.length; j++){
-
-        console.log("\nCertificate "+(j+1));
-        console.log("\n---Subject---");
-        var subjAttrs = p7.certificates[j].subject.attributes;
-        for(var i = 0; i < subjAttrs.length; i++) {
-            console.log(subjAttrs[i].name+" ("+subjAttrs[i].shortName+") "+subjAttrs[i].value);
-        }
-        console.log("\n---Issuer---");
-        var issuerAttrs = p7.certificates[j].issuer.attributes;
-        for(var i = 0; i < issuerAttrs.length; i++) {
-            console.log(issuerAttrs[i].name+" ("+issuerAttrs[i].shortName+") "+issuerAttrs[i].value);
-        }
-        console.log("----------------");
-
-      }
-
-}
 
 
 
